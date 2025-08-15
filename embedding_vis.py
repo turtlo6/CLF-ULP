@@ -49,7 +49,6 @@ def visualize_embedding(emb_dict, num_layers=3, num_nodes=100, title_prefix='GM'
         # plt.axis('off')
         ax = plt.gca()
 
-        # 设置更密的网格线，并放置到最底层
         ax.set_xticks(np.arange(-50, 50, 6))
         ax.set_yticks(np.arange(-50, 50, 6))
         ax.tick_params(axis='both', which='both', length=0)
@@ -59,14 +58,12 @@ def visualize_embedding(emb_dict, num_layers=3, num_nodes=100, title_prefix='GM'
         ax.set_axisbelow(True)
         ax.grid(True, linestyle='-', linewidth=1, alpha=0.4)
 
-        # 自动调整显示范围，微调边界
         x_min, x_max = emb_2d[:, 0].min(), emb_2d[:, 0].max()
         y_min, y_max = emb_2d[:, 1].min(), emb_2d[:, 1].max()
-        margin = 2  # 控制边缘留白
+        margin = 2
         ax.set_xlim(x_min - margin, x_max + margin)
         ax.set_ylim(y_min - margin, y_max + margin)
 
-        # 保存图片时去除多余空白
         plt.savefig(f'vis/{title_prefix}_{t_key}_embedding.png', dpi=300, bbox_inches='tight', pad_inches=0.05)
         plt.close()
 
