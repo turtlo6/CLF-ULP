@@ -1,8 +1,3 @@
-# _*_ coding : utf-8 _*_
-# @Time : 2025/4/15 13:38
-# @Author : wfr
-# @file : utils
-# @Project : MultilayerUAVLP
 
 import numpy as np
 import torch
@@ -15,24 +10,10 @@ import torch
 
 
 def get_multilayer_snapshots(path, num_layers, layer_prefix):
-    """
-    读取多个层的edge_seq.npy文件，并转换为PyTorch的edge_index格式。
-
-    参数:
-        path (str): 包含多个 *_edge_seq.npy 文件的文件夹路径
-        num_layers (int): 层数（例如3表示有 GM_A、GM_B、GM_C 三层）
-        layer_prefix (str): 层前缀（例如 "GM" 或 "RW"）
-
-    返回:
-        edge_index_sequence (List[List[Tensor]]):
-            edge_index_sequence[t][l] 表示第 t 个时间步第 l 层的边张量
-    """
     edge_index_sequence = []
 
-    # 根据传入的前缀动态生成文件名
     layer_names = [f'{layer_prefix}_A', f'{layer_prefix}_B', f'{layer_prefix}_C'][:num_layers]
 
-    # 读取所有层的数据
     all_layers_edge_seq = []
     for name in layer_names:
         file_path = os.path.join(path, f'{name}_edge_seq.npy')
@@ -45,10 +26,9 @@ def get_multilayer_snapshots(path, num_layers, layer_prefix):
         for l in range(num_layers):
             edges = all_layers_edge_seq[l][t]
             if len(edges) == 0:
-                # 若无边则构造空edge_index张量
                 edge_index = torch.empty((2, 0), dtype=torch.long)
             else:
-                edge_array = np.array(edges).T  # 转置成 [2, num_edges]
+                edge_array = np.array(edges).T
                 edge_index = torch.tensor(edge_array, dtype=torch.long)
             snapshot_at_t.append(edge_index)
         edge_index_sequence.append(snapshot_at_t)
