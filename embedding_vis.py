@@ -4,7 +4,6 @@ from sklearn.manifold import TSNE
 import os
 import torch
 from matplotlib.lines import Line2D
-
 data_name = "MG"
 learning_rate = 1e-4
 file_path = "emb/emb_%s_%s.npz" % (data_name, learning_rate)
