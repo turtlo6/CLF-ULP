@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 
 
-# ===== CrossGAT3Layer（结构建模） =====
+# ===== CrossGAT3Layer=====
 class CrossGAT3Layer(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, num_layers=2, heads=2, dropout=0.6):
         super(CrossGAT3Layer, self).__init__()
@@ -13,26 +13,25 @@ class CrossGAT3Layer(nn.Module):
         self.gat_layers = nn.ModuleList()
         self.cross_attn = nn.ModuleList()
 
-        # 输入层GAT
+        # input layer GAT
         self.gat_layers.append(nn.ModuleList([
             GATConv(in_dim, hidden_dim, heads=heads, concat=True, dropout=dropout)
             for _ in range(3)
         ]))
 
-        # 中间层
+        # hidden layer
         for _ in range(num_layers - 2):
             self.gat_layers.append(nn.ModuleList([
                 GATConv(hidden_dim * heads, hidden_dim, heads=heads, concat=True, dropout=dropout)
                 for _ in range(3)
             ]))
 
-        # 输出层GAT
+        # output layer GAT
         self.gat_layers.append(nn.ModuleList([
             GATConv(hidden_dim * heads, out_dim, heads=1, concat=False, dropout=dropout)
             for _ in range(3)
         ]))
 
-        # cross_attn 的输入维度设置
         attn_in_dims = [hidden_dim * heads] * (num_layers - 1) + [out_dim]
         for l in range(num_layers):
             self.cross_attn.append(nn.ModuleList([
@@ -40,21 +39,16 @@ class CrossGAT3Layer(nn.Module):
             ]))
 
     def forward(self, xs, edge_indices):
-        """
-        :param xs: 节点特征, 长度为3的list; xs[i]: [num_nodes, in_dim]
-        :param edge_indices: 长度为3的list; edge_indices[i]: [2, num_edges_i]
-        :return: 长度为3的list
-        """
-        # 遍历每层神经网络
+        # Traverse each layer of neural network
         for layer in range(self.num_layers):
             new_xs = []
-            # 本层对三个图都跑 GATConv，存下来
+            # Run GATConv on all three graphs in this layer and save them
             x_all = [self.gat_layers[layer][j](xs[j], edge_indices[j]) for j in range(3)]
-            # 遍历每层多层图
+            # Traverse each layer and multi-layer graph
             for i in range(3):
                 x_self = x_all[i]
                 j, k = (i + 1) % 3, (i + 2) % 3
-                xj, xk = x_all[j], x_all[k]  # 注意这里是 x_all 不是 xs
+                xj, xk = x_all[j], x_all[k]
 
                 a_j = torch.sigmoid(self.cross_attn[layer][i](xj))
                 a_k = torch.sigmoid(self.cross_attn[layer][i](xk))
@@ -72,7 +66,7 @@ class DynamicMultiLayerLP(nn.Module):
 
         self.node_embeddings = nn.ModuleList([
             nn.Embedding(num_nodes, hidden_dim) for _ in range(3)
-        ])  # 每层一个 embedding
+        ])
 
         self.crossgat = CrossGAT3Layer(
             in_dim=hidden_dim, hidden_dim=hidden_dim, out_dim=embed_dim,
@@ -86,20 +80,14 @@ class DynamicMultiLayerLP(nn.Module):
         )
 
     def forward(self, edge_index_seq_list):
-        """
-        :param edge_index_seq_list: 长度为T的list，每个元素是长度为3的 edge_index 列表
-        :return: pred_adj_list: list of (N, N) predicted adjacency matrices
-        """
         T = len(edge_index_seq_list)
         num_layers = 3
         N = self.node_embeddings[0].num_embeddings
 
-        # z_history表示每层的每个时间步的节点嵌入矩阵
-        # z_history[l][t]表示第l层在时间步t的节点嵌入矩阵Tensor shape (N, F)
         z_history = [[] for _ in range(num_layers)]
 
         for t in range(T):
-            # 构造每层节点特征：直接查 embedding
+            # Construct node features for each layer: directly check embedding
             x_t_list = [self.node_embeddings[l].weight for l in range(num_layers)]
             edge_t_list = edge_index_seq_list[t]
             z_t_list = self.crossgat(x_t_list, edge_t_list)
@@ -109,7 +97,7 @@ class DynamicMultiLayerLP(nn.Module):
         # Stack over time: (N, T, F)
         z_stacked = [torch.stack(z_history[l], dim=1) for l in range(num_layers)]
 
-        # LSTM 时间建模
+        # LSTM time modeling
         h_final = []
         for l in range(num_layers):
             output, (h_n, _) = self.lstm(z_stacked[l])  # h_n: (1, N, lstm_hidden)
@@ -135,7 +123,7 @@ class DynamicMultiLayerLP_no_lstm(nn.Module):
 
         self.node_embeddings = nn.ModuleList([
             nn.Embedding(num_nodes, hidden_dim) for _ in range(3)
-        ])  # 每层一个 embedding
+        ])
 
         self.crossgat = CrossGAT3Layer(
             in_dim=hidden_dim, hidden_dim=hidden_dim, out_dim=embed_dim,
@@ -149,26 +137,22 @@ class DynamicMultiLayerLP_no_lstm(nn.Module):
         )
 
     def forward(self, edge_index_seq_list):
-        """
-        :param edge_index_seq_list: 长度为T的list，每个元素是长度为3的 edge_index 列表
-        :return: pred_adj_list: list of (N, N) predicted adjacency matrices
-        """
         T = len(edge_index_seq_list)
         num_layers = 3
         N = self.node_embeddings[0].num_embeddings
 
-        # z_history[l][t] 表示第l层在时间t的节点嵌入 (N, F)
+        # z_history[l][t] indicate the node embedding of layer l at time t (N, F)
         z_history = [[] for _ in range(num_layers)]
 
         for t in range(T):
-            # 每层输入初始节点特征
+            # Input initial node features for each layer
             x_t_list = [self.node_embeddings[l].weight for l in range(num_layers)]
             edge_t_list = edge_index_seq_list[t]
             z_t_list = self.crossgat(x_t_list, edge_t_list)
             for l in range(num_layers):
                 z_history[l].append(z_t_list[l])
 
-        # 使用最后一个时间步的嵌入进行预测
+        # Use the embedding of the last time step for prediction
         h_final = [z_history[l][-1] for l in range(num_layers)]  # 每层一个 (N, embed_dim)
 
         pred_adj_list = []
