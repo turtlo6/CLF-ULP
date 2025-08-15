@@ -12,18 +12,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def setup_seed(seed):
-    torch.manual_seed(seed)  # 设置PyTorch随机种子
-    torch.cuda.manual_seed_all(seed)  # 设置PyTorch的CUDA随机种子（如果GPU可用）
-    np.random.seed(seed)  # 设置NumPy的随机种子
-    random.seed(seed)  # 设置Python内置random库的随机种子
-    torch.backends.cudnn.deterministic = True  # 设置使用CUDA加速时保证结果一致性
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 
 setup_seed(0)
 
 data_name = 'GM_2'
 num_nodes = 100
-num_layers = 3  # 网络层数
+num_layers = 3
 history_len = 10
 num_snaps = 80
 num_train_snaps = 60
@@ -47,12 +47,8 @@ num_node_embedding_save = 20
 
 # Load multilayer dynamic snapshots
 data_path = "data"
-# edge_index_sequence = List[List[Tensor]]
-# edge_index_sequence[t][l] = 第 t 个时间步，第 l 层图的边（edge_index）张量
-edge_index_sequence = get_multilayer_snapshots(path=data_path, num_layers=num_layers, layer_prefix=data_name)
 
-# Create train/test target links
-# train_edges, test_edges = make_train_val_test_edges(edge_index_sequence, history_len)
+edge_index_sequence = get_multilayer_snapshots(path=data_path, num_layers=num_layers, layer_prefix=data_name)
 
 # Initialize model
 model = DynamicMultiLayerLP(in_dim, hidden_dim, embed_dim, gat_layer_num, lstm_hidden_dim).to(device)
@@ -67,14 +63,14 @@ def train():
     for t in tqdm(range(history_len, num_train_snaps)):
         optimizer.zero_grad()
 
-        # 构造输入序列
+        # Construct input sequence
         history_edge_index_seq = edge_index_sequence[t - history_len:t]
         history_edge_index_seq = [[e.to(device) for e in snapshot] for snapshot in history_edge_index_seq]
 
-        # 模型输出：List of [N, N] 邻接矩阵
+        # Model output: List of [N, N] adjacency matrix
         pred_adj_list, embedding_list = model(history_edge_index_seq)
 
-        # 构造真实邻接矩阵（每一层）
+        # Construct true adjacency matrix (each layer)
         true_edge_index_list = edge_index_sequence[t]
         true_adj_list = [edge_index_to_adj(edge_idx.to(device), num_nodes) for edge_idx in true_edge_index_list]
 
@@ -89,14 +85,14 @@ def train():
     return total_loss / count
 
 
-# Step 5: Evaluation function
+# Evaluation function
 @torch.no_grad()
 def test(save_embedding=False, save_path=embedding_save_path, num_save=num_node_embedding_save):
     model.eval()
     auc_list = []
     ap_list = []
 
-    # 随机选择 num_save 个时间步用于保存嵌入
+    # Randomly select num_save time steps to save embedding
     save_timesteps = random.sample(range(num_snaps - num_test_snaps, num_snaps), num_save)
     saved_embeddings = {}
 
@@ -134,7 +130,7 @@ def test(save_embedding=False, save_path=embedding_save_path, num_save=num_node_
     return sum(auc_list) / len(auc_list), sum(ap_list) / len(ap_list)
 
 
-# Step 6: Run training and validation
+# Run training and validation
 best_AUC = 0
 best_AUPRC = 0
 no_improve_epochs = 0
@@ -160,6 +156,6 @@ for epoch in range(1, num_epochs + 1):
         f"Epoch {epoch:02d}, Loss: {loss:.4f}, Test AUC: {cur_auc:.4f}, AP: {cur_auprc:.4f}, Best AUC: {best_AUC:.4f}, AP: {best_AUPRC:.4f}\n")
     f_input.close()
 
-# Step 7: Final test
+# Final test
 test_auc, test_ap = test(True)
 print(f"Final Test AUC: {test_auc:.4f}, AP: {test_ap:.4f}")
